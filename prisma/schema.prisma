@@ -1,0 +1,525 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntityType {
+  PERSONAL
+  HOLDING
+}
+
+enum AccountKind {
+  BANK
+  CREDIT_CARD
+  PAYPAL
+  CRYPTO_EXCHANGE
+  CASH
+  INVESTMENT
+  OTHER
+}
+
+enum ConnectionProvider {
+  ABN_AMRO
+  ICS
+  PAYPAL
+  BITVAVO
+  MANUAL
+  MOCK
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum TransactionDirection {
+  DEBIT
+  CREDIT
+}
+
+enum AssetType {
+  PROPERTY
+  VEHICLE
+  BUSINESS
+  CRYPTO
+  CASH
+  MANUAL
+}
+
+enum LiabilityType {
+  MORTGAGE
+  LOAN
+  TAX
+  CREDIT_CARD
+  MANUAL
+}
+
+enum ValueSource {
+  MANUAL
+  IMPORTED
+  EXTRACTED
+  CALCULATED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PARSED
+  INDEXED
+  FAILED
+}
+
+enum ExtractedValueKind {
+  EXACT
+  INFERRED
+  UNKNOWN
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+model User {
+  id              String             @id @default(cuid())
+  email           String             @unique
+  name            String?
+  image           String?
+  preferredLocale String             @default("nl-NL")
+  preferredCcy    String             @default("EUR")
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  accounts        Account[]
+  entities        EntityMembership[]
+  sessions        Session[]
+  chatThreads     ChatConversation[]
+  documents       Document[]
+  authAccounts    AuthAccount[]
+}
+
+model AuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String?
+  sessionState      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Entity {
+  id                String                  @id @default(cuid())
+  name              String
+  type              EntityType
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  memberships       EntityMembership[]
+  accounts          Account[]
+  assets            Asset[]
+  liabilities       Liability[]
+  netWorthSnapshots NetWorthSnapshot[]
+  transactions      Transaction[]
+  subscriptionHints SubscriptionCandidate[]
+  taxSnapshots      TaxInsightSnapshot[]
+}
+
+model EntityMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  entityId  String
+  role      String   @default("OWNER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityId])
+}
+
+model Account {
+  id                    String                  @id @default(cuid())
+  userId                String
+  entityId              String
+  name                  String
+  iban                  String?
+  kind                  AccountKind
+  currency              String                  @default("EUR")
+  currentBalanceCents   BigInt                  @default(0)
+  availableBalanceCents BigInt?
+  source                ValueSource             @default(MANUAL)
+  notes                 String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity                Entity                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  connection            AccountConnection?
+  transactions          Transaction[]
+  balanceHistory        AccountBalanceHistory[]
+}
+
+model AccountConnection {
+  id                String             @id @default(cuid())
+  accountId         String             @unique
+  provider          ConnectionProvider
+  externalAccountId String?
+  encryptedToken    String?
+  lastSyncAt        DateTime?
+  status            String             @default("manual")
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  account           Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  syncRuns          SyncRun[]
+}
+
+model SyncRun {
+  id                  String            @id @default(cuid())
+  accountConnectionId String
+  startedAt           DateTime          @default(now())
+  endedAt             DateTime?
+  status              SyncStatus
+  summary             String?
+  rawPayload          Json?
+  createdAt           DateTime          @default(now())
+  connection          AccountConnection @relation(fields: [accountConnectionId], references: [id], onDelete: Cascade)
+}
+
+model AccountBalanceHistory {
+  id            String      @id @default(cuid())
+  accountId     String
+  balanceCents  BigInt
+  effectiveDate DateTime
+  source        ValueSource
+  notes         String?
+  createdAt     DateTime    @default(now())
+  account       Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, effectiveDate])
+}
+
+model Merchant {
+  id             String        @id @default(cuid())
+  rawName        String
+  normalizedName String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  transactions   Transaction[]
+
+  @@unique([rawName, normalizedName])
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  colorHex     String        @default("#6B7280")
+  isSystem     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@unique([name])
+}
+
+model Transaction {
+  id                    String               @id @default(cuid())
+  accountId             String
+  entityId              String
+  merchantId            String?
+  categoryId            String?
+  bookedAt              DateTime
+  valueDate             DateTime?
+  amountCents           BigInt
+  currency              String               @default("EUR")
+  direction             TransactionDirection
+  description           String
+  normalizedMerchant    String?
+  externalTransactionId String?
+  dedupeHash            String
+  tags                  String[]
+  notes                 String?
+  rawPayload            Json?
+  source                ValueSource          @default(IMPORTED)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  account               Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entity                Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  merchant              Merchant?            @relation(fields: [merchantId], references: [id])
+  category              Category?            @relation(fields: [categoryId], references: [id])
+  citations             Citation[]
+
+  @@unique([accountId, dedupeHash])
+  @@index([entityId, bookedAt])
+}
+
+model SubscriptionCandidate {
+  id                 String   @id @default(cuid())
+  entityId           String
+  merchantName       String
+  cadenceDays        Int
+  averageAmountCents BigInt
+  confidence         Float
+  firstSeenAt        DateTime
+  lastSeenAt         DateTime
+  status             String   @default("PENDING")
+  rationale          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  entity             Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+model Asset {
+  id         String           @id @default(cuid())
+  entityId   String
+  type       AssetType
+  name       String
+  notes      String?
+  source     ValueSource      @default(MANUAL)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  entity     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  valuations AssetValuation[]
+  property   Property?
+}
+
+model AssetValuation {
+  id            String      @id @default(cuid())
+  assetId       String
+  valueCents    BigInt
+  effectiveDate DateTime
+  source        ValueSource
+  sourceLabel   String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  asset         Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, effectiveDate])
+}
+
+model Liability {
+  id         String               @id @default(cuid())
+  entityId   String
+  type       LiabilityType
+  name       String
+  notes      String?
+  source     ValueSource          @default(MANUAL)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  entity     Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  valuations LiabilityValuation[]
+  mortgage   Mortgage?
+}
+
+model LiabilityValuation {
+  id            String      @id @default(cuid())
+  liabilityId   String
+  valueCents    BigInt
+  effectiveDate DateTime
+  source        ValueSource
+  sourceLabel   String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+  liability     Liability   @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+
+  @@index([liabilityId, effectiveDate])
+}
+
+model Property {
+  id                  String    @id @default(cuid())
+  assetId             String    @unique
+  address             String
+  latestWozValueCents BigInt?
+  latestWozYear       Int?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  mortgage            Mortgage?
+}
+
+model Mortgage {
+  id                  String             @id @default(cuid())
+  liabilityId         String             @unique
+  propertyId          String?            @unique
+  lender              String
+  interestRatePct     Float
+  termMonths          Int
+  startDate           DateTime
+  originalAmountCents BigInt
+  monthlyPaymentCents BigInt
+  currentBalanceCents BigInt
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  liability           Liability          @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+  property            Property?          @relation(fields: [propertyId], references: [id])
+  snapshots           MortgageSnapshot[]
+}
+
+model MortgageSnapshot {
+  id                  String      @id @default(cuid())
+  mortgageId          String
+  balanceCents        BigInt
+  monthlyPaymentCents BigInt?
+  source              ValueSource
+  effectiveDate       DateTime
+  notes               String?
+  createdAt           DateTime    @default(now())
+  mortgage            Mortgage    @relation(fields: [mortgageId], references: [id], onDelete: Cascade)
+
+  @@index([mortgageId, effectiveDate])
+}
+
+model NetWorthSnapshot {
+  id                    String      @id @default(cuid())
+  entityId              String
+  date                  DateTime
+  totalAssetsCents      BigInt
+  totalLiabilitiesCents BigInt
+  netWorthCents         BigInt
+  source                ValueSource @default(CALCULATED)
+  createdAt             DateTime    @default(now())
+  entity                Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, date])
+}
+
+model Document {
+  id              String           @id @default(cuid())
+  userId          String
+  title           String
+  mimeType        String
+  filePath        String
+  status          DocumentStatus   @default(UPLOADED)
+  checksum        String
+  totalPages      Int?
+  extractedText   String?
+  metadata        Json?
+  parseError      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks          DocumentChunk[]
+  extractedFields ExtractedField[]
+  citations       Citation[]
+}
+
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  chunkIndex Int
+  page       Int?
+  content    String
+  embedding  Float[]
+  tokenCount Int
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, chunkIndex])
+}
+
+model ExtractedField {
+  id            String             @id @default(cuid())
+  documentId    String
+  fieldName     String
+  value         String?
+  valueKind     ExtractedValueKind
+  confidence    Float?
+  sourceChunkId String?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  document      Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model ChatConversation {
+  id        String        @id @default(cuid())
+  userId    String
+  title     String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           ChatRole
+  content        String
+  toolResult     Json?
+  createdAt      DateTime         @default(now())
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  citations      Citation[]
+
+  @@index([conversationId, createdAt])
+}
+
+model Citation {
+  id              String       @id @default(cuid())
+  messageId       String
+  transactionId   String?
+  documentId      String?
+  documentChunkId String?
+  label           String
+  metadata        Json?
+  createdAt       DateTime     @default(now())
+  message         ChatMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  transaction     Transaction? @relation(fields: [transactionId], references: [id])
+  document        Document?    @relation(fields: [documentId], references: [id])
+}
+
+model TaxYearConfig {
+  id                     String   @id @default(cuid())
+  year                   Int      @unique
+  box3ExemptionCents     BigInt
+  box3RatePct            Float
+  mortgageInterestCapPct Float
+  assumptions            Json
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model TaxInsightSnapshot {
+  id                             String   @id @default(cuid())
+  entityId                       String
+  year                           Int
+  estimatedBox3BaseCents         BigInt
+  estimatedBox3TaxCents          BigInt
+  estimatedMortgageInterestCents BigInt
+  assumptions                    Json
+  createdAt                      DateTime @default(now())
+  entity                         Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, year])
+}
