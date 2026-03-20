@@ -15,7 +15,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "setup:check": "tsx scripts/preflight.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.3.1",
     "lucide-react": "^0.577.0",
     "next": "16.2.0",
     "next-auth": "^4.24.13",

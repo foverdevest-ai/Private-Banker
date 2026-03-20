@@ -44,7 +44,7 @@ docker compose up -d postgres
 ```
 4. Apply migrations and seed:
 ```bash
-npm run db:migrate
+npm run db:push
 npm run db:seed
 ```
 5. Start app:
@@ -63,7 +63,9 @@ npm run dev
 - `npm run test:e2e` run Playwright e2e tests
 - `npm run db:migrate` run migrations in dev
 - `npm run db:deploy` apply migrations in production
+- `npm run db:push` sync schema directly to local DB
 - `npm run db:seed` load realistic demo data
+- `npm run setup:check` verify env + DB + connector readiness
 
 ## Architecture Notes
 - Single app process (no unnecessary microservices), with clear module boundaries:
@@ -87,6 +89,13 @@ npm run dev
 2. In Accounts page, choose provider and click `Connect`.
 3. Complete provider authorization (OAuth providers).
 4. Click `Sync now` to import transactions.
+
+## Go-Live Checklist
+1. Set production env vars from `.env.production.example`.
+2. Run `npm run setup:check` and resolve all `FAIL` lines.
+3. Validate OAuth redirect URL is exactly `${CONNECTOR_REDIRECT_BASE_URL}/api/connect/callback` in each provider console.
+4. Connect each account from the Accounts page and verify token status in Settings.
+5. Trigger `Sync now` per account and confirm imported transactions.
 
 ## Deployment
 - Dockerfile and `docker-compose.yml` are included.
