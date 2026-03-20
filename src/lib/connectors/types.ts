@@ -14,7 +14,22 @@ export type ConnectorSyncResult = {
   rawPayload: unknown;
 };
 
+export type ConnectorProviderKey = "ABN_AMRO" | "ICS" | "PAYPAL" | "BITVAVO" | "MANUAL" | "MOCK";
+
+export type ConnectorTokenPayload = {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  tokenType?: string;
+  scope?: string;
+};
+
 export interface AccountConnector {
-  key: "ABN_AMRO" | "ICS" | "PAYPAL" | "BITVAVO" | "MANUAL" | "MOCK";
-  sync(accountExternalId: string): Promise<ConnectorSyncResult>;
+  key: ConnectorProviderKey;
+  getAuthorizationUrl?(state: string): string;
+  exchangeCodeForToken?(code: string, redirectUri: string): Promise<ConnectorTokenPayload>;
+  sync(input: {
+    accountExternalId: string;
+    token?: ConnectorTokenPayload;
+  }): Promise<ConnectorSyncResult>;
 }

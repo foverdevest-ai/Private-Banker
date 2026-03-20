@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { connectors } from "@/lib/connectors";
+import { syncConnectedAccount } from "@/lib/connectors";
 import { getCurrentUserOrThrow } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -26,8 +26,23 @@ export async function POST(request: Request) {
   }
 
   const providerKey = account.connection?.provider ?? "MANUAL";
-  const connector = connectors[providerKey];
-  const result = await connector.sync(account.connection?.externalAccountId ?? account.id);
+  let result;
+  try {
+    result = await syncConnectedAccount({
+      provider: providerKey,
+      account,
+      connection: account.connection,
+    });
+  } catch (error) {
+    result = {
+      status: "FAILED" as const,
+      transactions: [],
+      summary: error instanceof Error ? error.message : "Unexpected sync error",
+      rawPayload: {
+        error: error instanceof Error ? error.message : "unknown",
+      },
+    };
+  }
 
   await prisma.$transaction(async (tx) => {
     if (account.connection) {

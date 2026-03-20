@@ -76,9 +76,17 @@ npm run dev
 - Manual overrides coexist with imported values.
 
 ## Integrations Status
-- **ABN AMRO, ICS, PayPal, Bitvavo**: implemented via provider abstraction with mocked/dev adapters and manual fallback flows.
-- **Direct ABN production sync blocker**: live OAuth/client setup and bank API contractual onboarding must be completed with real credentials. Architecture is prepared; mocked adapter keeps MVP operational.
+- **ABN AMRO / ICS / PayPal**: OAuth connect flow is implemented (`/api/connect` and `/api/connect/callback`), encrypted token storage is implemented, and sync endpoints call real provider APIs when credentials are configured.
+- **Bitvavo**: API key/secret signed sync flow is implemented.
+- **Fallback**: if provider credentials are missing or external onboarding is incomplete, sync returns a clear status and manual fallback remains available.
+- **Direct ABN production blocker**: final bank onboarding, app registration, and approved production credentials are still required.
 - **DEGIRO**: intentionally excluded from MVP.
+
+## Connector Setup
+1. Set connector env values in `.env` (`ABN_AMRO_*`, `ICS_*`, `PAYPAL_*`, `BITVAVO_*`, `CONNECTOR_REDIRECT_BASE_URL`).
+2. In Accounts page, choose provider and click `Connect`.
+3. Complete provider authorization (OAuth providers).
+4. Click `Sync now` to import transactions.
 
 ## Deployment
 - Dockerfile and `docker-compose.yml` are included.
